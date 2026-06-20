@@ -318,14 +318,12 @@ pub fn run_check(ctx: &EnvCtx) -> Result<(), String> {
             if let Ok(meta) = sym_meta {
                 if entry.item_type == "file" {
                     meta.file_type().is_symlink()
-                        && fs::read_link(original_path).is_ok_and(|t| {
-                            paths_equal_case_insensitive(&t, &backup_full_path)
-                        })
+                        && fs::read_link(original_path)
+                            .is_ok_and(|t| paths_equal_case_insensitive(&t, &backup_full_path))
                 } else {
                     junction::exists(original_path).unwrap_or(false)
-                        && junction::get_target(original_path).is_ok_and(|t| {
-                            paths_equal_case_insensitive(&t, &backup_full_path)
-                        })
+                        && junction::get_target(original_path)
+                            .is_ok_and(|t| paths_equal_case_insensitive(&t, &backup_full_path))
                 }
             } else {
                 false
@@ -436,32 +434,27 @@ pub fn run_list(ctx: &EnvCtx, show_backup: bool) -> Result<(), String> {
                 if name.starts_with('.') && name != "." && name != ".." {
                     let sym_meta = fs::symlink_metadata(&path);
                     if let Ok(meta) = sym_meta {
-                        let (link_type, item_type, target) =
-                            if junction::exists(&path).unwrap_or(false) {
-                                let target_str = junction::get_target(&path)
-                                    .map(|p| p.to_string_lossy().into_owned())
-                                    .unwrap_or_else(|_| "-".to_string());
-                                ("junction", "directory", target_str)
-                            } else if meta.file_type().is_symlink() {
-                                let target_str = fs::read_link(&path)
-                                    .map(|p| p.to_string_lossy().into_owned())
-                                    .unwrap_or_else(|_| "-".to_string());
-                                let is_dir =
-                                    fs::metadata(&path).map(|m| m.is_dir()).unwrap_or(false);
-                                let item_type = if is_dir { "directory" } else { "file" };
-                                ("symlink", item_type, target_str)
-                            } else {
-                                let is_dir = meta.is_dir();
-                                let item_type = if is_dir { "directory" } else { "file" };
-                                ("none", item_type, "-".to_string())
-                            };
+                        let (link_type, item_type, target) = if junction::exists(&path)
+                            .unwrap_or(false)
+                        {
+                            let target_str = junction::get_target(&path)
+                                .map(|p| p.to_string_lossy().into_owned())
+                                .unwrap_or_else(|_| "-".to_string());
+                            ("junction", "directory", target_str)
+                        } else if meta.file_type().is_symlink() {
+                            let target_str = fs::read_link(&path)
+                                .map(|p| p.to_string_lossy().into_owned())
+                                .unwrap_or_else(|_| "-".to_string());
+                            let is_dir = fs::metadata(&path).map(|m| m.is_dir()).unwrap_or(false);
+                            let item_type = if is_dir { "directory" } else { "file" };
+                            ("symlink", item_type, target_str)
+                        } else {
+                            let is_dir = meta.is_dir();
+                            let item_type = if is_dir { "directory" } else { "file" };
+                            ("none", item_type, "-".to_string())
+                        };
 
-                        items.push((
-                            name,
-                            item_type.to_string(),
-                            link_type.to_string(),
-                            target,
-                        ));
+                        items.push((name, item_type.to_string(), link_type.to_string(), target));
                     }
                 }
             }
