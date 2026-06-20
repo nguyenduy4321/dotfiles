@@ -1,4 +1,4 @@
-use crate::core::{ensure_storage, load_metadata, save_metadata, DotEntry, EnvCtx};
+use crate::core::{ensure_storage, get_storage_dir, load_metadata, save_metadata, DotEntry, EnvCtx};
 use crate::fs::{create_link, is_hard_link_to, move_item, paths_equal_case_insensitive, validate_and_normalize};
 use std::fs;
 use std::path::Path;
@@ -27,7 +27,7 @@ pub fn run_link(ctx: &EnvCtx, paths: &[String]) -> Result<(), String> {
         }
 
         let backup_relative = format!(".dotfiles\\{}", file_name);
-        let backup_full_path = ctx.exe_dir.join(&backup_relative);
+        let backup_full_path = get_storage_dir(ctx).join(&file_name);
         if backup_full_path.exists() {
             return Err("Backup target already exists".to_string());
         }
@@ -82,7 +82,8 @@ pub fn run_unlink(ctx: &EnvCtx, paths: &[String]) -> Result<(), String> {
         };
 
         let entry = &entries[entry_idx];
-        let backup_full_path = ctx.exe_dir.join(&entry.backup_path);
+        let backup_file_name = Path::new(&entry.backup_path).file_name().unwrap();
+        let backup_full_path = get_storage_dir(ctx).join(backup_file_name);
 
         if normalized.exists() || fs::symlink_metadata(&normalized).is_ok() {
             let is_junc = junction::exists(&normalized).unwrap_or(false);
@@ -114,7 +115,8 @@ pub fn run_check(ctx: &EnvCtx) -> Result<(), String> {
 
     entries.retain(|entry| {
         let original_path = Path::new(&entry.original_path);
-        let backup_full_path = ctx.exe_dir.join(&entry.backup_path);
+        let backup_file_name = Path::new(&entry.backup_path).file_name().unwrap();
+        let backup_full_path = get_storage_dir(ctx).join(backup_file_name);
         let file_name = original_path
             .file_name()
             .unwrap()
@@ -237,6 +239,7 @@ pub fn run_list(ctx: &EnvCtx, show_backup: bool) -> Result<(), String> {
             );
         }
     } else {
+        let entries = load_metadata(ctx).unwrap_or_default();
         let mut items = Vec::new();
         if ctx.user_profile.exists() {
             for entry in fs::read_dir(&ctx.user_profile)
@@ -265,7 +268,20 @@ pub fn run_list(ctx: &EnvCtx, show_backup: bool) -> Result<(), String> {
                         } else {
                             let is_dir = meta.is_dir();
                             let item_type = if is_dir { "directory" } else { "file" };
-                            ("none", item_type, "-".to_string())
+                            
+                            let mut resolved_link = "none";
+                            let mut resolved_target = "-".to_string();
+                            if !is_dir {
+                                if let Some(e) = entries.iter().find(|e| paths_equal_case_insensitive(Path::new(&e.original_path), &path)) {
+                                    let backup_name = Path::new(&e.backup_path).file_name().unwrap();
+                                    let backup_full = get_storage_dir(ctx).join(backup_name);
+                                    if is_hard_link_to(&path, &backup_full) {
+                                        resolved_link = "hardlink";
+                                        resolved_target = backup_full.to_string_lossy().into_owned();
+                                    }
+                                }
+                            }
+                            (resolved_link, item_type, resolved_target)
                         };
 
                         items.push((name, item_type.to_string(), link_type.to_string(), target));

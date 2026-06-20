@@ -1,5 +1,5 @@
 use crate::cmd::{run_check, run_link, run_list, run_unlink};
-use crate::core::{ensure_storage, load_metadata, save_metadata, DotEntry, EnvCtx, MOCK_LINK_FAIL, MOCK_RENAME_CROSS_DEVICE};
+use crate::core::{ensure_storage, get_storage_dir, load_metadata, save_metadata, DotEntry, EnvCtx, MOCK_LINK_FAIL, MOCK_RENAME_CROSS_DEVICE};
 use crate::fs::{paths_equal_case_insensitive, is_hard_link_to};
 use std::fs;
 
@@ -22,8 +22,8 @@ fn test_initialization() {
     let (_temp, ctx) = setup_sandbox();
     ensure_storage(&ctx).unwrap();
 
-    assert!(ctx.exe_dir.join(".dotfiles").exists());
-    assert!(ctx.exe_dir.join(".dotfiles").join(".dot").exists());
+    assert!(get_storage_dir(&ctx).exists());
+    assert!(get_storage_dir(&ctx).join(".dot").exists());
 
     let metadata = load_metadata(&ctx).unwrap();
     assert!(metadata.is_empty());
@@ -41,7 +41,7 @@ fn test_link_file() {
 
     // Check original file is now a link (either symlink or hardlink)
     let meta = fs::symlink_metadata(&file_path).unwrap();
-    let backup_path = ctx.exe_dir.join(".dotfiles").join(".gitconfig");
+    let backup_path = get_storage_dir(&ctx).join(".gitconfig");
     assert!(backup_path.exists());
     assert_eq!(fs::read_to_string(&backup_path).unwrap(), "test gitconfig");
 
@@ -80,7 +80,7 @@ fn test_link_directory() {
     assert!(junction::exists(&dir_path).unwrap());
 
     // Check backup exists and contains settings.json
-    let backup_path = ctx.exe_dir.join(".dotfiles").join(".config");
+    let backup_path = get_storage_dir(&ctx).join(".config");
     assert!(backup_path.exists());
     assert!(backup_path.join("settings.json").exists());
 
@@ -119,7 +119,7 @@ fn test_unlink() {
     run_link(&ctx, &[".gitconfig".to_string()]).unwrap();
     let meta_before = fs::symlink_metadata(&file_path).unwrap();
     let metadata = load_metadata(&ctx).unwrap();
-    let backup_path = ctx.exe_dir.join(".dotfiles").join(".gitconfig");
+    let backup_path = get_storage_dir(&ctx).join(".gitconfig");
     if metadata[0].link_type == "symlink" {
         assert!(meta_before.file_type().is_symlink());
     } else {
@@ -141,7 +141,7 @@ fn test_unlink() {
     assert_eq!(fs::read_to_string(&file_path).unwrap(), "test content");
 
     // Check backup is deleted/moved
-    assert!(!ctx.exe_dir.join(".dotfiles").join(".gitconfig").exists());
+    assert!(!get_storage_dir(&ctx).join(".gitconfig").exists());
 
     // Check metadata is empty
     let metadata = load_metadata(&ctx).unwrap();
@@ -183,7 +183,7 @@ fn test_safety_rollback_on_failure() {
     assert!(res.as_ref().unwrap_err().contains("Failed to create link"));
 
     // Verify backup folder is cleaned or rolled back
-    let backup_path = ctx.exe_dir.join(".dotfiles").join(".gitconfig");
+    let backup_path = get_storage_dir(&ctx).join(".gitconfig");
     assert!(!backup_path.exists());
 
     // Verify original file is restored
@@ -211,7 +211,7 @@ fn test_check_all_cases() {
     assert!(file_path.exists());
     let meta_case2 = fs::symlink_metadata(&file_path).unwrap();
     let metadata = load_metadata(&ctx).unwrap();
-    let backup_path = ctx.exe_dir.join(".dotfiles").join(".gitconfig");
+    let backup_path = get_storage_dir(&ctx).join(".gitconfig");
     if metadata[0].link_type == "symlink" {
         assert!(meta_case2.file_type().is_symlink());
     } else {
@@ -254,11 +254,11 @@ fn test_check_all_cases() {
 
     // Case 5: Metadata incorrect (original exists and is not a link) but backup exists (should self-heal)
     // Reset storage
-    fs::remove_dir_all(ctx.exe_dir.join(".dotfiles")).unwrap();
+    fs::remove_dir_all(get_storage_dir(&ctx)).unwrap();
     ensure_storage(&ctx).unwrap();
     let file_path2 = ctx.user_profile.join(".vimrc");
     fs::write(&file_path2, "vim").unwrap();
-    let backup_path2 = ctx.exe_dir.join(".dotfiles").join(".vimrc");
+    let backup_path2 = get_storage_dir(&ctx).join(".vimrc");
     fs::write(&backup_path2, "vim backup").unwrap();
     let mut entries = load_metadata(&ctx).unwrap();
     entries.push(DotEntry {
@@ -317,7 +317,7 @@ fn test_cross_device_fallback() {
     MOCK_RENAME_CROSS_DEVICE.with(|f| f.set(false));
 
     // Verify backup exists and contains correct content
-    let backup_path = ctx.exe_dir.join(".dotfiles").join(".gitconfig");
+    let backup_path = get_storage_dir(&ctx).join(".gitconfig");
     assert!(backup_path.exists());
     assert_eq!(
         fs::read_to_string(&backup_path).unwrap(),
@@ -356,7 +356,7 @@ fn test_cross_device_dir_fallback() {
     MOCK_RENAME_CROSS_DEVICE.with(|f| f.set(false));
 
     // Verify backup exists and contains settings.json
-    let backup_path = ctx.exe_dir.join(".dotfiles").join(".config");
+    let backup_path = get_storage_dir(&ctx).join(".config");
     assert!(backup_path.exists());
     assert!(backup_path.join("settings.json").exists());
     assert_eq!(
