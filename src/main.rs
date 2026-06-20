@@ -5,7 +5,30 @@ use std::path::PathBuf;
 
 fn print_help() {
     println!(
-        "dotfiles - A Windows CLI to manage and backup dotfiles\n\nUsage:\n  dotfiles link <paths...>          # Backup each dotfile and replace with a symlink (file) or junction (dir)\n  dotfiles unlink <paths...>        # Restore original files from backup and remove links\n  dotfiles check                     # Verify integrity; recreates missing links if backup exists, removes entries if backup missing\n  dotfiles list                      # List dotfiles present in your USERPROFILE with link status\n  dotfiles list --backup             # List dotfiles that are currently backed up (metadata)\n  dotfiles help                      # Show this help message\n\nOptions:\n  <paths...>   One or more dotfiles (must start with a '.') relative to $USERPROFILE or absolute paths inside $USERPROFILE.\n\nExamples:\n  dotfiles link .gitconfig .vimrc    # Manage two config files\n  dotfiles unlink .gitconfig         # Restore original config\n  dotfiles check                     # Run verification and clean up broken entries\n  dotfiles list --backup             # See which dotfiles are currently stored in .dotfiles\n\nNotes:\n  • A dotfile is any file or directory whose name starts with a '.' (dot).\n  • Backups are stored in the executable's directory under .dotfiles/.\n  • Links are created as symlinks on files and directory junctions on Windows for directories.\n  • If a dotfile is already managed, linking it again prints a notice and does nothing.\n  • Unlinking an un-managed path prints a notice and does nothing.\n  • The check command recreates missing/broken links if the backup exists, and deletes links/metadata if the backup is missing, reporting each action."
+        "\x1b[1;36m     _       _   __ _ _             \x1b[0m\n\
+         \x1b[1;36m  __| | ___ | |_/ _(_) | ___  ___   \x1b[0m\n\
+         \x1b[1;36m / _` |/ _ \\| __| |_| | |/ _ \\/ __|  \x1b[0m\n\
+         \x1b[1;36m| (_| | (_) | |_|  _| | |  __/\\__ \\  \x1b[0m\n\
+         \x1b[1;36m \\__,_|\\___/ \\__|_| |_|_|\\___||___/  \x1b[0m\n\n\
+         \x1b[1;32mdotfiles\x1b[0m - A Windows CLI to manage and backup dotfiles\n\n\
+         \x1b[1;33mUSAGE:\x1b[0m\n  \
+           dotfiles \x1b[1;36mlink\x1b[0m <paths...>          # Backup dotfiles and replace with symlink/junction\n  \
+           dotfiles \x1b[1;36munlink\x1b[0m <paths...>        # Restore files from backup and delete links\n  \
+           dotfiles \x1b[1;36mcheck\x1b[0m                     # Self-heal links and clean orphan metadata\n  \
+           dotfiles \x1b[1;36mlist\x1b[0m                      # List dotfiles in profile with active link status\n  \
+           dotfiles \x1b[1;36mlist --backup\x1b[0m             # List backed up dotfiles inside metadata\n  \
+           dotfiles \x1b[1;36mhelp\x1b[0m                      # Show this help guide\n\n\
+         \x1b[1;33mOPTIONS:\x1b[0m\n  \
+           \x1b[35m<paths...>\x1b[0m  One or more dotfiles starting with '.' in $USERPROFILE\n\n\
+         \x1b[1;33mEXAMPLES:\x1b[0m\n  \
+           dotfiles link .gitconfig .vimrc\n  \
+           dotfiles unlink .gitconfig\n  \
+           dotfiles check\n  \
+           dotfiles list --backup\n\n\
+         \x1b[1;33mNOTES:\x1b[0m\n  \
+           • Backups are stored in the executable's directory under \x1b[32m.dotfiles/\x1b[0m\n  \
+           • Links are symlinks on files and directory junctions on Windows\n  \
+           • Re-linking already managed files is safely ignored"
     );
 }
 
