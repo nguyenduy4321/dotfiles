@@ -1,52 +1,114 @@
-# dotfiles
+# 💻 dotfiles
 
-A lightweight, fast, Windows-first command-line tool written in Rust to manage, backup, and sync your dotfiles.
-
-## Features
-- **Zero Configuration**: Detects your dotfiles automatically under `$USERPROFILE` (must start with a `.`).
-- **Windows-First Design**: Uses Windows **directory junctions** for directories and **symbolic links** for files, ensuring compatibility without requiring elevated administrator shell access in many cases.
-- **Cross-Device Recovery**: Robust fallback copying mechanism when moving items between different disk drives.
-- **Self-Healing Integrity Check (`check`)**:
-  - Automatically restores missing symlinks/junctions if the backup exists.
-  - Automatically cleans up the link and removes the entry from metadata if the backup is missing.
-- **Robust List command**: Display details of active and backed up dotfiles, with clear metadata differentiating files/directories and symlinks/junctions.
-
-## Installation
-Ensure you have Rust and Cargo installed, then build:
-```bash
-cargo build --release
+```text
+     _       _   __ _ _
+  __| | ___ | |_/ _(_) | ___  ___
+ / _` |/ _ \| __| |_| | |/ _ \/ __|
+| (_| | (_) | |_|  _| | |  __/\__ \
+ \__,_|\___/ \__|_| |_|_|\___||___/
 ```
 
-## Usage
-All operations are relative to your `$USERPROFILE` directory.
+> **A lightweight, fast, Windows-first command-line utility written in Rust to seamlessly manage, backup, and restore your dotfiles.**
 
-### 1. Link a dotfile / directory
-Backup your original dotfile and replace it with a symlink (or junction for directories).
+---
+
+## ⚡ Quick Start
+
 ```bash
+# 1. Install dotfiles
+cargo install --path .
+
+# 2. Link your configuration files
 dotfiles link .gitconfig .config
-```
 
-### 2. Unlink / Restore
-Restore original files from the backup directory and remove the link.
-```bash
-dotfiles unlink .gitconfig
-```
-
-### 3. Check Integrity (Self-Healing)
-Verify the state of all managed dotfiles. Recreates missing links or removes orphan metadata.
-```bash
+# 3. Check health status
 dotfiles check
 ```
 
-### 4. List Dotfiles
-Show all dotfiles in your profile and their status:
-```bash
-dotfiles list
-```
-Or show all currently backed-up dotfiles:
-```bash
-dotfiles list --backup
+---
+
+## 🛠 System Overview & Architecture
+
+```text
+                 [ USERPROFILE ]
+            (e.g., C:\Users\Username)
+                       │
+         ┌─────────────┴─────────────┐
+         ▼                           ▼
+    .gitconfig                    .config
+   (Symlink File)           (Directory Junction)
+         │                           │
+         └─────────────┬─────────────┘
+                       ▼
+                 [ .dotfiles/ ]
+            (Backup & Storage Depot)
+                       │
+                       ▼
+                 [ .dot metadata ]
 ```
 
-## License
-MIT
+---
+
+## 🌟 Key Features
+
+*   **⚡ Zero Config**
+    Scans files/directories automatically under `$USERPROFILE` (must start with `.`).
+*   **🪟 Windows-First Design**
+    Uses directory junctions for directories and symbolic links for files. Works without needing elevated admin shell permissions.
+*   **🛡️ Self-Healing (`check`)**
+    Automatic sync & check. Recreates missing links if the backup is healthy, or purges metadata if the backup is missing.
+*   **💾 Cross-Device Safety**
+    Includes a robust fallback copying mechanism when migrating configs across different disk volumes.
+
+---
+
+## 🕹 Usage & CLI Commands
+
+```text
+Usage:
+  dotfiles link <paths...>      Backup dotfile and replace with symlink/junction
+  dotfiles unlink <paths...>    Restore original files from backup
+  dotfiles check                 Verify integrity and self-heal
+  dotfiles list                  List dotfiles under USERPROFILE and link status
+  dotfiles list --backup         List dotfiles stored in metadata backup
+  dotfiles help                  Show help guidelines
+```
+
+### Examples
+
+#### 🔗 Linking
+```bash
+$ dotfiles link .gitconfig .vimrc
+Moving .gitconfig -> .dotfiles\.gitconfig... Done!
+Creating symlink for .gitconfig... Done!
+```
+
+#### 🔍 Checking Status
+```bash
+$ dotfiles list
+NAME         TYPE       LINK       TARGET
+----------------------------------------------------
+.gitconfig   file       symlink    C:\path\to\.dotfiles\.gitconfig
+.config      directory  junction   C:\path\to\.dotfiles\.config
+```
+
+---
+
+## 📦 Build & Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/nguyenduy4321/dotfiles.git
+cd dotfiles
+
+# Build release profile
+cargo build --release
+```
+
+The optimized binary will be available at `./target/release/dotfiles.exe`.
+
+---
+
+## 📜 License
+
+Distributed under the **MIT** License. See `LICENSE` for more information.
