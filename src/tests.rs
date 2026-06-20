@@ -167,6 +167,7 @@ fn test_safety_rollback_on_failure() {
     MOCK_LINK_FAIL.with(|f| f.set(false));
 
     assert!(res.is_err());
+    assert!(res.as_ref().unwrap_err().contains("Failed to create link"));
 
     // Verify backup folder is cleaned or rolled back
     let backup_path = ctx.exe_dir.join(".dotfiles").join(".gitconfig");
