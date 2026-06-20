@@ -111,7 +111,73 @@ pub fn move_item(src: &Path, dst: &Path) -> std::io::Result<()> {
     }
 }
 
-pub fn create_link(item_type: &str, target: &Path, link_path: &Path) -> Result<(), std::io::Error> {
+#[cfg(windows)]
+#[repr(C)]
+struct FILETIME {
+    dw_low_date_time: u32,
+    dw_high_date_time: u32,
+}
+
+#[cfg(windows)]
+#[repr(C)]
+struct BY_HANDLE_FILE_INFORMATION {
+    dw_file_attributes: u32,
+    ft_creation_time: FILETIME,
+    ft_last_access_time: FILETIME,
+    ft_last_write_time: FILETIME,
+    dw_volume_serial_number: u32,
+    n_file_size_high: u32,
+    n_file_size_low: u32,
+    n_number_of_links: u32,
+    n_file_index_high: u32,
+    n_file_index_low: u32,
+}
+
+#[cfg(windows)]
+unsafe extern "system" {
+    fn GetFileInformationByHandle(
+        hfile: *mut std::ffi::c_void,
+        lpfileinformation: *mut BY_HANDLE_FILE_INFORMATION,
+    ) -> i32;
+}
+
+#[cfg(windows)]
+fn get_file_identity(path: &Path) -> Option<(u32, u64)> {
+    use std::os::windows::io::AsRawHandle;
+    let file = fs::File::open(path).ok()?;
+    let handle = file.as_raw_handle();
+    let mut info = std::mem::MaybeUninit::<BY_HANDLE_FILE_INFORMATION>::uninit();
+    unsafe {
+        if GetFileInformationByHandle(handle as *mut std::ffi::c_void, info.as_mut_ptr()) != 0 {
+            let info = info.assume_init();
+            let file_index = ((info.n_file_index_high as u64) << 32) | (info.n_file_index_low as u64);
+            Some((info.dw_volume_serial_number, file_index))
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(windows)]
+pub fn is_hard_link_to(p1: &Path, p2: &Path) -> bool {
+    if let (Some(id1), Some(id2)) = (get_file_identity(p1), get_file_identity(p2)) {
+        id1 == id2
+    } else {
+        false
+    }
+}
+
+#[cfg(not(windows))]
+pub fn is_hard_link_to(p1: &Path, p2: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    if let (Ok(m1), Ok(m2)) = (std::fs::metadata(p1), std::fs::metadata(p2)) {
+        m1.ino() == m2.ino() && m1.dev() == m2.dev()
+    } else {
+        false
+    }
+}
+
+pub fn create_link(item_type: &str, target: &Path, link_path: &Path) -> Result<String, std::io::Error> {
     #[cfg(test)]
     {
         if MOCK_LINK_FAIL.with(|f| f.get()) {
@@ -123,15 +189,28 @@ pub fn create_link(item_type: &str, target: &Path, link_path: &Path) -> Result<(
     }
 
     if item_type == "directory" {
-        junction::create(target, link_path)
+        junction::create(target, link_path)?;
+        Ok("junction".to_string())
     } else {
         #[cfg(windows)]
         {
-            std::os::windows::fs::symlink_file(target, link_path)
+            match std::os::windows::fs::symlink_file(target, link_path) {
+                Ok(()) => Ok("symlink".to_string()),
+                Err(e) => {
+                    if e.raw_os_error() == Some(1314) || e.kind() == std::io::ErrorKind::PermissionDenied {
+                        std::fs::hard_link(target, link_path)?;
+                        Ok("hardlink".to_string())
+                    } else {
+                        Err(e)
+                    }
+                }
+            }
         }
         #[cfg(not(windows))]
         {
-            std::os::unix::fs::symlink(target, link_path)
+            std::os::unix::fs::symlink(target, link_path)?;
+            Ok("symlink".to_string())
         }
     }
 }
+

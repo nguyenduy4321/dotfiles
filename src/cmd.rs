@@ -1,5 +1,5 @@
 use crate::core::{ensure_storage, load_metadata, save_metadata, DotEntry, EnvCtx};
-use crate::fs::{create_link, move_item, paths_equal_case_insensitive, validate_and_normalize};
+use crate::fs::{create_link, is_hard_link_to, move_item, paths_equal_case_insensitive, validate_and_normalize};
 use std::fs;
 use std::path::Path;
 
@@ -34,7 +34,6 @@ pub fn run_link(ctx: &EnvCtx, paths: &[String]) -> Result<(), String> {
 
         let is_dir = sym_meta.is_dir();
         let item_type = if is_dir { "directory" } else { "file" };
-        let link_type = if is_dir { "junction" } else { "symlink" };
 
         move_item(&normalized, &backup_full_path)
             .map_err(|e| format!("Failed to move item to backup: {}", e))?;
@@ -42,16 +41,19 @@ pub fn run_link(ctx: &EnvCtx, paths: &[String]) -> Result<(), String> {
         let link_result = create_link(item_type, &backup_full_path, &normalized)
             .map_err(|e| format!("Failed to create link: {}", e));
 
-        if let Err(e) = link_result {
-            let _ = move_item(&backup_full_path, &normalized);
-            return Err(e);
-        }
+        let actual_link_type = match link_result {
+            Ok(lt) => lt,
+            Err(e) => {
+                let _ = move_item(&backup_full_path, &normalized);
+                return Err(e);
+            }
+        };
 
         entries.push(DotEntry {
             original_path: normalized.to_string_lossy().into_owned(),
             backup_path: backup_relative,
             item_type: item_type.to_string(),
-            link_type: link_type.to_string(),
+            link_type: actual_link_type,
             status: "OK".to_string(),
         });
     }
@@ -126,9 +128,12 @@ pub fn run_check(ctx: &EnvCtx) -> Result<(), String> {
             let sym_meta = fs::symlink_metadata(original_path);
             if let Ok(meta) = sym_meta {
                 if entry.item_type == "file" {
-                    meta.file_type().is_symlink()
+                    let is_sym = meta.file_type().is_symlink()
                         && fs::read_link(original_path)
-                            .is_ok_and(|t| paths_equal_case_insensitive(&t, &backup_full_path))
+                            .is_ok_and(|t| paths_equal_case_insensitive(&t, &backup_full_path));
+                    let is_hard = !meta.file_type().is_symlink()
+                        && is_hard_link_to(original_path, &backup_full_path);
+                    is_sym || is_hard
                 } else {
                     junction::exists(original_path).unwrap_or(false)
                         && junction::get_target(original_path)

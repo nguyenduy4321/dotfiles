@@ -1,6 +1,6 @@
 use crate::cmd::{run_check, run_link, run_list, run_unlink};
 use crate::core::{ensure_storage, load_metadata, save_metadata, DotEntry, EnvCtx, MOCK_LINK_FAIL, MOCK_RENAME_CROSS_DEVICE};
-use crate::fs::paths_equal_case_insensitive;
+use crate::fs::{paths_equal_case_insensitive, is_hard_link_to};
 use std::fs;
 
 fn setup_sandbox() -> (tempfile::TempDir, EnvCtx) {
@@ -39,14 +39,23 @@ fn test_link_file() {
 
     run_link(&ctx, &[".gitconfig".to_string()]).unwrap();
 
-    // Check original file is now a symlink
+    // Check original file is now a link (either symlink or hardlink)
     let meta = fs::symlink_metadata(&file_path).unwrap();
-    assert!(meta.file_type().is_symlink());
-
-    // Check backup exists and contains content
     let backup_path = ctx.exe_dir.join(".dotfiles").join(".gitconfig");
     assert!(backup_path.exists());
-    assert_eq!(fs::read_to_string(backup_path).unwrap(), "test gitconfig");
+    assert_eq!(fs::read_to_string(&backup_path).unwrap(), "test gitconfig");
+
+    let metadata = load_metadata(&ctx).unwrap();
+    assert_eq!(metadata.len(), 1);
+    if metadata[0].link_type == "symlink" {
+        assert!(meta.file_type().is_symlink());
+        let target = fs::read_link(&file_path).unwrap();
+        assert!(paths_equal_case_insensitive(&target, &backup_path));
+    } else {
+        assert_eq!(metadata[0].link_type, "hardlink");
+        assert!(!meta.file_type().is_symlink());
+        assert!(is_hard_link_to(&file_path, &backup_path));
+    }
 
     // Check metadata
     let metadata = load_metadata(&ctx).unwrap();
@@ -108,12 +117,16 @@ fn test_unlink() {
     fs::write(&file_path, "test content").unwrap();
 
     run_link(&ctx, &[".gitconfig".to_string()]).unwrap();
-    assert!(
-        fs::symlink_metadata(&file_path)
-            .unwrap()
-            .file_type()
-            .is_symlink()
-    );
+    let meta_before = fs::symlink_metadata(&file_path).unwrap();
+    let metadata = load_metadata(&ctx).unwrap();
+    let backup_path = ctx.exe_dir.join(".dotfiles").join(".gitconfig");
+    if metadata[0].link_type == "symlink" {
+        assert!(meta_before.file_type().is_symlink());
+    } else {
+        assert_eq!(metadata[0].link_type, "hardlink");
+        assert!(!meta_before.file_type().is_symlink());
+        assert!(is_hard_link_to(&file_path, &backup_path));
+    }
 
     run_unlink(&ctx, &[".gitconfig".to_string()]).unwrap();
 
@@ -196,35 +209,39 @@ fn test_check_all_cases() {
     fs::remove_file(&file_path).unwrap();
     run_check(&ctx).unwrap();
     assert!(file_path.exists());
-    assert!(
-        fs::symlink_metadata(&file_path)
-            .unwrap()
-            .file_type()
-            .is_symlink()
-    );
+    let meta_case2 = fs::symlink_metadata(&file_path).unwrap();
+    let metadata = load_metadata(&ctx).unwrap();
+    let backup_path = ctx.exe_dir.join(".dotfiles").join(".gitconfig");
+    if metadata[0].link_type == "symlink" {
+        assert!(meta_case2.file_type().is_symlink());
+    } else {
+        assert!(!meta_case2.file_type().is_symlink());
+        assert!(is_hard_link_to(&file_path, &backup_path));
+    }
     let metadata = load_metadata(&ctx).unwrap();
     assert_eq!(metadata.len(), 1);
 
     // Case 3: Link points to wrong target but backup exists (should self-heal)
-    // Replace with a wrong symlink
+    // Replace with a wrong link
     fs::remove_file(&file_path).unwrap();
     let wrong_target_path = ctx.exe_dir.join("wrong_target");
     fs::write(&wrong_target_path, "wrong").unwrap();
     #[cfg(windows)]
-    std::os::windows::fs::symlink_file(&wrong_target_path, &file_path).unwrap();
+    std::fs::hard_link(&wrong_target_path, &file_path).unwrap();
     #[cfg(not(windows))]
     std::os::unix::fs::symlink(&wrong_target_path, &file_path).unwrap();
     run_check(&ctx).unwrap();
     assert!(file_path.exists());
-    assert!(
-        fs::symlink_metadata(&file_path)
-            .unwrap()
-            .file_type()
-            .is_symlink()
-    );
-    let target = fs::read_link(&file_path).unwrap();
-    let backup_path = ctx.exe_dir.join(".dotfiles").join(".gitconfig");
-    assert!(paths_equal_case_insensitive(&target, &backup_path));
+    let meta_case3 = fs::symlink_metadata(&file_path).unwrap();
+    let metadata = load_metadata(&ctx).unwrap();
+    if metadata[0].link_type == "symlink" {
+        assert!(meta_case3.file_type().is_symlink());
+        let target = fs::read_link(&file_path).unwrap();
+        assert!(paths_equal_case_insensitive(&target, &backup_path));
+    } else {
+        assert!(!meta_case3.file_type().is_symlink());
+        assert!(is_hard_link_to(&file_path, &backup_path));
+    }
     let metadata = load_metadata(&ctx).unwrap();
     assert_eq!(metadata.len(), 1);
 
@@ -255,12 +272,13 @@ fn test_check_all_cases() {
     run_check(&ctx).unwrap();
     let metadata = load_metadata(&ctx).unwrap();
     assert_eq!(metadata.len(), 1);
-    assert!(
-        fs::symlink_metadata(&file_path2)
-            .unwrap()
-            .file_type()
-            .is_symlink()
-    );
+    let meta_case5 = fs::symlink_metadata(&file_path2).unwrap();
+    if meta_case5.file_type().is_symlink() {
+        let target = fs::read_link(&file_path2).unwrap();
+        assert!(paths_equal_case_insensitive(&target, &backup_path2));
+    } else {
+        assert!(is_hard_link_to(&file_path2, &backup_path2));
+    }
 }
 
 #[test]
@@ -306,9 +324,18 @@ fn test_cross_device_fallback() {
         "cross-device file content"
     );
 
-    // Verify link points to the backup path
-    let target = fs::read_link(&file_path).unwrap();
-    assert!(paths_equal_case_insensitive(&target, &backup_path));
+    // Verify link points to the backup path (either symlink or hardlink)
+    let meta = fs::symlink_metadata(&file_path).unwrap();
+    let metadata = load_metadata(&ctx).unwrap();
+    if metadata[0].link_type == "symlink" {
+        assert!(meta.file_type().is_symlink());
+        let target = fs::read_link(&file_path).unwrap();
+        assert!(paths_equal_case_insensitive(&target, &backup_path));
+    } else {
+        assert_eq!(metadata[0].link_type, "hardlink");
+        assert!(!meta.file_type().is_symlink());
+        assert!(is_hard_link_to(&file_path, &backup_path));
+    }
 }
 
 #[test]
