@@ -16,26 +16,17 @@
 ```
 
 ### 📋 About
-
-**dotfiles** is an ultra-fast, Windows-first command-line utility built in Rust to manage your dotfiles without hassle. It uses Windows **directory junctions** and **file symbolic links** to safely mirror your configuration files from `$USERPROFILE` directly into a centralized backup folder (`.dotfiles/`), protecting your data while maintaining compatibility.
+**dotfiles** is a lightweight, high-performance command-line utility built in Rust to manage your dotfiles on Windows. It centralization mirrors configuration files and folders from your `$USERPROFILE` directory into a secure `.dotfiles/` directory, using native symbolic links and directory junctions to keep configuration paths active.
 
 ---
 
-### ⚡ Quick Command Cheat Sheet
+### ⚙️ Windows Symlink Requirement
+By default, creating symbolic links in Windows requires elevated administrator permissions. To run `dotfiles` without Administrator rights:
+1. Open **Settings** (Win + I).
+2. Go to **Update & Security** > **For developers** (or search "Developer settings").
+3. Toggle **Developer Mode** to **On**.
 
-```bash
-# 📦 Add & backup configuration files
-dotfiles link .gitconfig .config
-
-# 🔄 Restore configurations to their original state
-dotfiles unlink .gitconfig
-
-# 🩺 Run integrity diagnostics (Self-Healing)
-dotfiles check
-
-# 🔍 View current managed files & backup statuses
-dotfiles list
-```
+*Otherwise, please run your terminal/shell as **Administrator**.*
 
 ---
 
@@ -58,3 +49,39 @@ dotfiles list
        │       .dot (Metadata JSON)    │
        └───────────────────────────────┘
 ```
+
+---
+
+### 📦 Installation
+Ensure you have Rust/Cargo installed, then run:
+```bash
+# Install directly from repository path
+cargo install --path .
+```
+
+---
+
+### 🕹 Usage Guide
+All commands are simple and clean:
+```text
+Usage:
+  dotfiles link <paths...>      Backup dotfiles and replace with symlink/junction
+  dotfiles unlink <paths...>    Restore original files from backup
+  dotfiles check                 Verify health and self-heal missing links
+  dotfiles list                  List active dotfiles and targets
+  dotfiles list --backup         List all backed up files in metadata database
+  dotfiles help                  Display help guide
+```
+
+#### Examples
+- **Link configurations**:
+  `dotfiles link .gitconfig .config`
+- **Verify health & self-heal**:
+  `dotfiles check`
+- **Check status list**:
+  `dotfiles list`
+
+---
+
+### 📜 License
+Licensed under the **MIT** License.

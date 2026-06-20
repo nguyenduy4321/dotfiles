@@ -9,21 +9,28 @@ dotfiles - A Windows-First command-line utility written in Rust to manage,
 backup, and restore your configuration files.
 
 [ ABOUT ]
-dotfiles is a high-performance utility that automatically links files and
-folders in your Windows USERPROFILE directory to a centralized backup folder
-named `.dotfiles/`. It uses native symlinks for files and junctions for
-directories, keeping your workspace clean and safe.
+dotfiles is a high-performance utility that centralization mirrors configuration
+files and folders from your Windows USERPROFILE directory into a secure
+`.dotfiles/` directory, using native symlinks for files and junctions for
+directories.
+
+[ WINDOWS SYMLINK REQUIREMENT ]
+By default, creating symbolic links in Windows requires elevated administrator
+permissions. To run `dotfiles` without Administrator rights:
+1. Open Settings (Win + I).
+2. Go to Update & Security > For developers.
+3. Toggle "Developer Mode" to On.
+
+Otherwise, please run your terminal/shell as Administrator.
 
 [ QUICK START ]
-1. Run PowerShell as Administrator (only needed for file symlinks if Developer
-   Mode is not enabled on your system).
-2. To link/backup a configuration file or folder:
+1. To link/backup a configuration file or folder:
    dotfiles link .gitconfig .config
-3. To unlink/restore the files to their original locations:
+2. To unlink/restore the files to their original locations:
    dotfiles unlink .gitconfig
-4. To check/verify integrity and self-heal broken links:
+3. To check/verify integrity and self-heal broken links:
    dotfiles check
-5. To list all active or backed up dotfiles:
+4. To list all active or backed up dotfiles:
    dotfiles list
    dotfiles list --backup
 
